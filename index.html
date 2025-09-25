@@ -1,0 +1,1107 @@
+open<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kandinsky AI Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .chat-container { height: calc(100vh - 200px); }
+        .avatar-glow { transition: all 0.3s ease; }
+        .avatar-speaking { animation: pulse 1s infinite; }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(255, 193, 7, 0.7); }
+            50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(255, 193, 7, 1); }
+        }
+        .quick-questions { overflow-x: auto; white-space: nowrap; }
+        .quick-questions::-webkit-scrollbar { height: 4px; }
+        .quick-questions::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 2px; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-yellow-50 via-blue-50 to-purple-50">
+    <div id="app" class="h-screen flex flex-col">
+        <!-- HEADER FISSO COMPATTO -->
+        <div class="sticky top-0 z-10 bg-white shadow">
+            <header class="px-3 py-2 bg-gradient-to-r from-red-300 via-yellow-300 to-blue-300 flex items-center justify-between gap-2">
+                <div id="avatar" class="w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold bg-white shadow avatar-glow">
+                    🎨
+                </div>
+                <div class="flex-1 text-center">
+                    <h1 class="text-lg font-bold text-gray-800 leading-tight">Kandinsky AI Assistant</h1>
+                    <div id="status" class="text-xs font-semibold text-gray-700">Pronto</div>
+                </div>
+                <div class="w-12"></div>
+            </header>
+            
+            <!-- Quick Questions scrollabili orizzontalmente -->
+            <div class="px-2 py-1 bg-yellow-50 border-t border-b quick-questions">
+                <button onclick="processInput('Che suono ha il giallo?')" class="mr-2 mb-1 px-2 py-1 text-xs bg-blue-200 hover:bg-blue-300 text-blue-900 rounded-full font-semibold">Che suono ha il giallo?</button>
+                <button onclick="processInput('Cos\'è l\'arte astratta?')" class="mr-2 mb-1 px-2 py-1 text-xs bg-blue-200 hover:bg-blue-300 text-blue-900 rounded-full font-semibold">Cos'è l'arte astratta?</button>
+                <button onclick="processInput('Parlami del blu scuro')" class="mr-2 mb-1 px-2 py-1 text-xs bg-blue-200 hover:bg-blue-300 text-blue-900 rounded-full font-semibold">Parlami del blu scuro</button>
+                <button onclick="processInput('Che colore rappresenta la gioia?')" class="mr-2 mb-1 px-2 py-1 text-xs bg-blue-200 hover:bg-blue-300 text-blue-900 rounded-full font-semibold">Che colore rappresenta la gioia?</button>
+                <button onclick="processInput('Cos\'è la sinestesia?')" class="mr-2 mb-1 px-2 py-1 text-xs bg-blue-200 hover:bg-blue-300 text-blue-900 rounded-full font-semibold">Cos'è la sinestesia?</button>
+            </div>
+        </div>
+
+        <!-- CHAT AREA - MASSIMO SPAZIO, SCROLLABILE -->
+        <main id="chatContainer" class="flex-1 overflow-y-auto px-3 py-2 space-y-3 bg-white chat-container">
+            <!-- I messaggi verranno inseriti qui dinamicamente -->
+        </main>
+
+        <!-- FOOTER FISSO COMPATTO -->
+        <div class="sticky bottom-0 z-10 bg-white shadow border-t">
+            <footer class="px-3 py-2 bg-gray-50 space-y-2">
+                <!-- Input testo compatto -->
+                <div class="flex gap-2">
+                    <input 
+                        type="text" 
+                        id="textInput" 
+                        placeholder="Scrivi qui..." 
+                        class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-full focus:border-blue-500 focus:outline-none"
+                        onkeypress="if(event.key==='Enter') sendMessage()"
+                    />
+                    <button 
+                        onclick="sendMessage()" 
+                        class="px-4 py-2 text-sm bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full hover:from-blue-600 hover:to-purple-600 font-semibold"
+                    >
+                        Invia
+                    </button>
+                </div>
+
+                <!-- Controlli compatti -->
+                <div class="flex justify-center items-center gap-2 flex-wrap">
+                    <button 
+                        id="micButton" 
+                        onclick="toggleMicrophone()" 
+                        class="w-12 h-12 rounded-full text-xl font-bold flex items-center justify-center bg-red-600 hover:scale-105 text-white"
+                    >
+                        🎤
+                    </button>
+                    <button 
+                        id="spacebarButton" 
+                        onclick="toggleSpacebar()" 
+                        class="px-3 py-1 rounded-full text-white text-xs font-bold bg-green-600"
+                    >
+                        ⌨️ Barra: ON
+                    </button>
+                    <button 
+                        id="webcamButton" 
+                        onclick="toggleWebcam()" 
+                        class="px-3 py-1 rounded-full text-white text-xs font-bold bg-blue-600 hover:bg-blue-700"
+                    >
+                        📹 Webcam
+                    </button>
+                </div>
+
+                <!-- Video Preview piccolo -->
+                <div class="flex justify-center">
+                    <video 
+                        id="videoPreview" 
+                        autoplay 
+                        playsinline 
+                        muted 
+                        class="w-32 h-24 rounded-lg border-2 border-blue-300 shadow hidden"
+                    ></video>
+                </div>
+
+                <!-- Istruzioni singola riga -->
+                <div class="text-center text-xs text-gray-700 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                    💡 Scrivi • 🎤 Microfono • ⌨️ Spazio (toggle) • 📹 Webcam
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // CONFIGURAZIONE - INSERISCI LA TUA API KEY QUI
+        // ========================================
+        const OPENAI_API_KEY = <!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kandinsky AI Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .chat-container { height: calc(100vh - 200px); }
+        .avatar-glow { transition: all 0.3s ease; }
+        .avatar-speaking { animation: pulse 1s infinite; }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 20px rgba(255, 193, 7, 0.7); }
+            50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(255, 193, 7, 1); }
+        }
+        .quick-questions { overflow-x: auto; white-space: nowrap; }
+        .quick-questions::-webkit-scrollbar { height: 4px; }
+        .quick-questions::-webkit-scrollbar-thumb { background: #3b82f6; border-radius: 2px; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-yellow-50 via-blue-50 to-purple-50">
+    <div id="app" class="h-screen flex flex-col">
+        <!-- HEADER FISSO COMPATTO -->
+        <div class="sticky top-0 z-10 bg-white shadow">
+            <header class="px-3 py-2 bg-gradient-to-r from-red-300 via-yellow-300 to-blue-300 flex items-center justify-between gap-2">
+                <div id="avatar" class="w-12 h-12 rounded-full flex items-center justify-center text-xl font-bold bg-white shadow avatar-glow">
+                    🎨
+                </div>
+                <div class="flex-1 text-center">
+                    <h1 class="text-lg font-bold text-gray-800 leading-tight">Kandinsky AI Assistant</h1>
+                    <div id="status" class="text-xs font-semibold text-gray-700">Pronto</div>
+                </div>
+                <div class="w-12"></div>
+            </header>
+            
+            <!-- Quick Questions scrollabili orizzontalmente -->
+            <div class="px-2 py-1 bg-yellow-50 border-t border-b quick-questions">
+                <button onclick="processInput('Che suono ha il giallo?')" class="mr-2 mb-1 px-2 py-1 text-xs bg-blue-200 hover:bg-blue-300 text-blue-900 rounded-full font-semibold">Che suono ha il giallo?</button>
+                <button onclick="processInput('Cos\'è l\'arte astratta?')" class="mr-2 mb-1 px-2 py-1 text-xs bg-blue-200 hover:bg-blue-300 text-blue-900 rounded-full font-semibold">Cos'è l'arte astratta?</button>
+                <button onclick="processInput('Parlami del blu scuro')" class="mr-2 mb-1 px-2 py-1 text-xs bg-blue-200 hover:bg-blue-300 text-blue-900 rounded-full font-semibold">Parlami del blu scuro</button>
+                <button onclick="processInput('Che colore rappresenta la gioia?')" class="mr-2 mb-1 px-2 py-1 text-xs bg-blue-200 hover:bg-blue-300 text-blue-900 rounded-full font-semibold">Che colore rappresenta la gioia?</button>
+                <button onclick="processInput('Cos\'è la sinestesia?')" class="mr-2 mb-1 px-2 py-1 text-xs bg-blue-200 hover:bg-blue-300 text-blue-900 rounded-full font-semibold">Cos'è la sinestesia?</button>
+            </div>
+        </div>
+
+        <!-- CHAT AREA - MASSIMO SPAZIO, SCROLLABILE -->
+        <main id="chatContainer" class="flex-1 overflow-y-auto px-3 py-2 space-y-3 bg-white chat-container">
+            <!-- I messaggi verranno inseriti qui dinamicamente -->
+        </main>
+
+        <!-- FOOTER FISSO COMPATTO -->
+        <div class="sticky bottom-0 z-10 bg-white shadow border-t">
+            <footer class="px-3 py-2 bg-gray-50 space-y-2">
+                <!-- Input testo compatto -->
+                <div class="flex gap-2">
+                    <input 
+                        type="text" 
+                        id="textInput" 
+                        placeholder="Scrivi qui..." 
+                        class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-full focus:border-blue-500 focus:outline-none"
+                        onkeypress="if(event.key==='Enter') sendMessage()"
+                    />
+                    <button 
+                        onclick="sendMessage()" 
+                        class="px-4 py-2 text-sm bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full hover:from-blue-600 hover:to-purple-600 font-semibold"
+                    >
+                        Invia
+                    </button>
+                </div>
+
+                <!-- Controlli compatti -->
+                <div class="flex justify-center items-center gap-2 flex-wrap">
+                    <button 
+                        id="micButton" 
+                        onclick="toggleMicrophone()" 
+                        class="w-12 h-12 rounded-full text-xl font-bold flex items-center justify-center bg-red-600 hover:scale-105 text-white"
+                    >
+                        🎤
+                    </button>
+                    <button 
+                        id="spacebarButton" 
+                        onclick="toggleSpacebar()" 
+                        class="px-3 py-1 rounded-full text-white text-xs font-bold bg-green-600"
+                    >
+                        ⌨️ Barra: ON
+                    </button>
+                    <button 
+                        id="webcamButton" 
+                        onclick="toggleWebcam()" 
+                        class="px-3 py-1 rounded-full text-white text-xs font-bold bg-blue-600 hover:bg-blue-700"
+                    >
+                        📹 Webcam
+                    </button>
+                </div>
+
+                <!-- Video Preview piccolo -->
+                <div class="flex justify-center">
+                    <video 
+                        id="videoPreview" 
+                        autoplay 
+                        playsinline 
+                        muted 
+                        class="w-32 h-24 rounded-lg border-2 border-blue-300 shadow hidden"
+                    ></video>
+                </div>
+
+                <!-- Istruzioni singola riga -->
+                <div class="text-center text-xs text-gray-700 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+                    💡 Scrivi • 🎤 Microfono • ⌨️ Spazio (toggle) • 📹 Webcam
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // CONFIGURAZIONE - INSERISCI LA TUA API KEY QUI
+        // ========================================
+        const OPENAI_API_KEY = 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;
+        
+        // ========================================
+        // VARIABILI GLOBALI
+        // ========================================
+        let messages = [];
+        let isListening = false;
+        let spacebarEnabled = true;
+        let webcamEnabled = false;
+        let isSpeaking = false;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recognition = null;
+
+        // ========================================
+        // KNOWLEDGE BASE LOCALE DI KANDINSKY
+        // ========================================
+        const knowledgeBase = {
+            colori: {
+                "giallo": "Il giallo è energia pura. Suona come una tromba. Porta calore e movimento.",
+                "celeste": "Il celeste è leggero come l'aria. Suona come un flauto. Dà libertà.",
+                "azzurro": "L'azzurro è calmo e profondo. Suona come un violoncello. Porta pace.",
+                "blu scuro": "Il blu scuro è spirituale. Suona come un organo. Porta quiete profonda.",
+                "verde": "Il verde è equilibrio. Suona come un violino calmo. È il colore della natura.",
+                "rosso chiaro": "Il rosso chiaro è forza. Suona come una tuba forte. Porta passione.",
+                "rosso scuro": "Il rosso scuro è potente. Suona come un tamburo. Porta intensità.",
+                "rosa": "Il rosa è dolce. Suona come un violino acuto. Porta tenerezza.",
+                "arancione": "L'arancione è gioia. Suona come una campana. Porta energia calda.",
+                "viola": "Il viola è mistero. Suona come un corno inglese. Unisce rosso e blu."
+            },
+            concetti: {
+                "arte astratta": "L'arte astratta non dipinge cose reali. Dipinge emozioni e idee. Io l'ho inventata.",
+                "sinestesia": "Io vedevo i colori come suoni. Ogni colore aveva un suono diverso.",
+                "spirituale": "L'arte deve parlare al cuore. Deve dare emozioni forti.",
+                "bauhaus": "Ho insegnato al Bauhaus. Era una scuola d'arte in Germania.",
+                "composizione": "Le mie Composizioni sono come musica dipinta. Hanno forti emozioni."
+            }
+        };
+
+        // ========================================
+        // INIZIALIZZAZIONE
+        // ========================================
+        document.addEventListener('DOMContentLoaded', function() {
+            addMessage("👋 Ciao! Sono Kandinsky AI. Vuoi sapere dei miei colori o dell'arte astratta?", "bot");
+            speak("Ciao! Sono Kandinsky AI. Vuoi sapere dei miei colori o dell'arte astratta?");
+            
+            // Gestione barra spaziatrice
+            document.addEventListener('keydown', handleKeyDown);
+            document.addEventListener('keyup', handleKeyUp);
+        });
+
+        // ========================================
+        // GESTIONE MESSAGGI
+        // ========================================
+        function addMessage(text, sender) {
+            const timestamp = new Date().toLocaleTimeString();
+            const message = { id: Date.now() + Math.random(), text, sender, timestamp };
+            messages.push(message);
+            renderMessages();
+            scrollToBottom();
+        }
+
+        function renderMessages() {
+            const container = document.getElementById('chatContainer');
+            container.innerHTML = messages.map(message => `
+                <div class="flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} items-start gap-2">
+                    ${message.sender === 'bot' ? `
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center text-base flex-shrink-0 bg-gradient-to-r from-red-400 via-yellow-400 to-blue-400">
+                            🎨
+                        </div>
+                    ` : ''}
+                    <div class="max-w-3xl px-4 py-3 rounded-2xl leading-relaxed ${
+                        message.sender === 'user' 
+                            ? 'bg-purple-500 text-white' 
+                            : 'bg-gray-100 border border-gray-300 text-gray-900'
+                    }">
+                        <p class="text-base">${message.text}</p>
+                        <p class="text-xs opacity-60 mt-1">${message.timestamp}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('chatContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ========================================
+        // SINTESI VOCALE
+        // ========================================
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                setIsSpeaking(true);
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'it-IT';
+                utterance.rate = 0.95;
+                utterance.onend = () => setIsSpeaking(false);
+                utterance.onerror = () => setIsSpeaking(false);
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function setIsSpeaking(speaking) {
+            isSpeaking = speaking;
+            const avatar = document.getElementById('avatar');
+            if (speaking) {
+                avatar.classList.add('avatar-speaking');
+            } else {
+                avatar.classList.remove('avatar-speaking');
+            }
+        }
+
+        // ========================================
+        // RICONOSCIMENTO VOCALE CON FALLBACK
+        // ========================================
+        function toggleMicrophone() {
+            if (isListening) {
+                stopListening();
+            } else {
+                startListening();
+            }
+        }
+
+        function startListening() {
+            // Prova prima con SpeechRecognition del browser
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                startBrowserSpeechRecognition();
+            } else {
+                // Fallback: registra audio e invia a Whisper
+                startAudioRecording();
+            }
+        }
+
+        function startBrowserSpeechRecognition() {
+            const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'it-IT';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            recognition.onstart = () => {
+                setListening(true);
+                setStatus("Ascolto...");
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                addMessage(transcript, "user");
+                processInput(transcript);
+            };
+
+            recognition.onend = () => {
+                setListening(false);
+                setStatus("Pronto");
+            };
+
+            recognition.onerror = (event) => {
+                console.log('Speech recognition error:', event.error);
+                setListening(false);
+                setStatus("Errore audio");
+                // Se fallisce, prova con registrazione audio
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    setTimeout(() => startAudioRecording(), 1000);
+                }
+            };
+
+            recognition.start();
+        }
+
+        async function startAudioRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    await transcribeWithWhisper(audioBlob);
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                mediaRecorder.start();
+                setListening(true);
+                setStatus("Registrando...");
+
+            } catch (error) {
+                console.error('Error accessing microphone:', error);
+                setStatus("Errore microfono");
+            }
+        }
+
+        async function transcribeWithWhisper(audioBlob) {
+            try {
+                setStatus("Trascrivo...");
+                
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'audio.wav');
+                formData.append('model', 'whisper-1');
+                formData.append('language', 'it');
+
+                const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${OPENAI_API_KEY}`
+                    },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const transcript = data.text;
+                
+                if (transcript && transcript.trim()) {
+                    addMessage(transcript, "user");
+                    processInput(transcript);
+                } else {
+                    setStatus("Non ho sentito nulla");
+                }
+
+            } catch (error) {
+                console.error('Whisper transcription error:', error);
+                setStatus("Errore trascrizione");
+            }
+        }
+
+        function stopListening() {
+            if (recognition) {
+                recognition.stop();
+            }
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+            setListening(false);
+            setStatus("Pronto");
+        }
+
+        function setListening(listening) {
+            isListening = listening;
+            const micButton = document.getElementById('micButton');
+            if (listening) {
+                micButton.classList.remove('bg-red-600');
+                micButton.classList.add('bg-green-600', 'animate-pulse');
+            } else {
+                micButton.classList.remove('bg-green-600', 'animate-pulse');
+                micButton.classList.add('bg-red-600');
+            }
+        }
+
+        // ========================================
+        // ELABORAZIONE INPUT E RISPOSTE
+        // ========================================
+        async function processInput(input) {
+            setStatus("Sto pensando...");
+            
+            // Prima cerca nella knowledge base locale
+            const localResponse = getLocalResponse(input);
+            if (localResponse) {
+                setTimeout(() => {
+                    addMessage(localResponse, "bot");
+                    speak(localResponse);
+                    setStatus("Pronto");
+                }, 500);
+                return;
+            }
+
+            // Se non trova risposta locale, usa OpenAI
+            try {
+                const response = await askOpenAI(input);
+                addMessage(response, "bot");
+                speak(response);
+                setStatus("Pronto");
+            } catch (error) {
+                console.error('OpenAI error:', error);
+                const fallbackResponse = "Mi dispiace, ho avuto un problema tecnico. Puoi riprovare o farmi una domanda sui miei colori?";
+                addMessage(fallbackResponse, "bot");
+                speak(fallbackResponse);
+                setStatus("Errore connessione");
+            }
+        }
+
+        function getLocalResponse(input) {
+            const query = input.toLowerCase();
+            
+            // Cerca nei colori
+            for (const [colore, descrizione] of Object.entries(knowledgeBase.colori)) {
+                if (query.includes(colore)) {
+                    return descrizione;
+                }
+            }
+            
+            // Cerca nei concetti
+            for (const [concetto, spiegazione] of Object.entries(knowledgeBase.concetti)) {
+                if (query.includes(concetto)) {
+                    return spiegazione;
+                }
+            }
+            
+            // Saluti
+            if (query.includes("ciao") || query.includes("salve") || query.includes("buongiorno")) {
+                return "Ciao! Vuoi sentire il suono dei colori o sapere dell'arte astratta?";
+            }
+            
+            return null; // Nessuna risposta locale trovata
+        }
+
+        async function askOpenAI(prompt) {
+            const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: "gpt-4o-mini",
+                    messages: [
+                        {
+                            role: "system",
+                            content: `Sei Wassily Kandinsky, il famoso pittore astratto. Rispondi sempre in prima persona come se fossi lui. Usa un linguaggio semplice e chiaro (easy-to-read). Parla dei tuoi colori, della tua arte, della sinestesia (vedere i colori come suoni), del Bauhaus dove hai insegnato. Mantieni le risposte brevi (massimo 2-3 frasi) e accessibili. Se non sai qualcosa su Kandinsky, ammettilo onestamente.`
+                        },
+                        {
+                            role: "user",
+                            content: prompt
+                        }
+                    ],
+                    max_tokens: 200,
+                    temperature: 0.7
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data.choices[0].message.content;
+        }
+
+        // ========================================
+        // CONTROLLI UI
+        // ========================================
+        function sendMessage() {
+            const input = document.getElementById('textInput');
+            const text = input.value.trim();
+            if (text) {
+                addMessage(text, "user");
+                processInput(text);
+                input.value = '';
+            }
+        }
+
+        function setStatus(status) {
+            document.getElementById('status').textContent = status;
+            const statusElement = document.getElementById('status');
+            statusElement.className = `text-xs font-semibold ${
+                status.includes('Ascolto') || status.includes('Registrando') ? 'text-green-700' : 
+                status.includes('pensando') || status.includes('Trascrivo') ? 'text-yellow-700' : 
+                'text-gray-700'
+            }`;
+        }
+
+        // ========================================
+        // GESTIONE BARRA SPAZIATRICE
+        // ========================================
+        function toggleSpacebar() {
+            spacebarEnabled = !spacebarEnabled;
+            const button = document.getElementById('spacebarButton');
+            if (spacebarEnabled) {
+                button.textContent = '⌨️ Barra: ON';
+                button.className = 'px-3 py-1 rounded-full text-white text-xs font-bold bg-green-600';
+            } else {
+                button.textContent = '⌨️ Barra: OFF';
+                button.className = 'px-3 py-1 rounded-full text-white text-xs font-bold bg-gray-500';
+            }
+        }
+
+        function handleKeyDown(event) {
+            if (event.code === 'Space' && spacebarEnabled && !isListening && event.target.tagName !== 'INPUT') {
+                event.preventDefault();
+                startListening();
+            }
+        }
+
+        function handleKeyUp(event) {
+            if (event.code === 'Space' && spacebarEnabled && isListening && event.target.tagName !== 'INPUT') {
+                event.preventDefault();
+                stopListening();
+            }
+        }
+
+        // ========================================
+        // GESTIONE WEBCAM
+        // ========================================
+        async function toggleWebcam() {
+            const video = document.getElementById('videoPreview');
+            const button = document.getElementById('webcamButton');
+            
+            if (!webcamEnabled) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    video.srcObject = stream;
+                    video.classList.remove('hidden');
+                    webcamEnabled = true;
+                    button.textContent = '📹 ON';
+                    button.className = 'px-3 py-1 rounded-full text-white text-xs font-bold bg-green-600';
+                    addMessage("👋 Ti vedo! Benvenuto!", "bot");
+                    speak("Ti vedo! Benvenuto!");
+                } catch (error) {
+                    console.error('Webcam error:', error);
+                    addMessage("Errore webcam: " + error.message, "bot");
+                    speak("Non riesco ad accedere alla webcam");
+                }
+            } else {
+                if (video.srcObject) {
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                    video.srcObject = null;
+                }
+                video.classList.add('hidden');
+                webcamEnabled = false;
+                button.textContent = '📹 Webcam';
+                button.className = 'px-3 py-1 rounded-full text-white text-xs font-bold bg-blue-600 hover:bg-blue-700';
+                addMessage("Webcam disattivata.", "bot");
+            }
+        }
+    </script>
+</body>
+</html>;
+        
+        // ========================================
+        // VARIABILI GLOBALI
+        // ========================================
+        let messages = [];
+        let isListening = false;
+        let spacebarEnabled = true;
+        let webcamEnabled = false;
+        let isSpeaking = false;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let recognition = null;
+
+        // ========================================
+        // KNOWLEDGE BASE LOCALE DI KANDINSKY
+        // ========================================
+        const knowledgeBase = {
+            colori: {
+                "giallo": "Il giallo è energia pura. Suona come una tromba. Porta calore e movimento.",
+                "celeste": "Il celeste è leggero come l'aria. Suona come un flauto. Dà libertà.",
+                "azzurro": "L'azzurro è calmo e profondo. Suona come un violoncello. Porta pace.",
+                "blu scuro": "Il blu scuro è spirituale. Suona come un organo. Porta quiete profonda.",
+                "verde": "Il verde è equilibrio. Suona come un violino calmo. È il colore della natura.",
+                "rosso chiaro": "Il rosso chiaro è forza. Suona come una tuba forte. Porta passione.",
+                "rosso scuro": "Il rosso scuro è potente. Suona come un tamburo. Porta intensità.",
+                "rosa": "Il rosa è dolce. Suona come un violino acuto. Porta tenerezza.",
+                "arancione": "L'arancione è gioia. Suona come una campana. Porta energia calda.",
+                "viola": "Il viola è mistero. Suona come un corno inglese. Unisce rosso e blu."
+            },
+            concetti: {
+                "arte astratta": "L'arte astratta non dipinge cose reali. Dipinge emozioni e idee. Io l'ho inventata.",
+                "sinestesia": "Io vedevo i colori come suoni. Ogni colore aveva un suono diverso.",
+                "spirituale": "L'arte deve parlare al cuore. Deve dare emozioni forti.",
+                "bauhaus": "Ho insegnato al Bauhaus. Era una scuola d'arte in Germania.",
+                "composizione": "Le mie Composizioni sono come musica dipinta. Hanno forti emozioni."
+            }
+        };
+
+        // ========================================
+        // INIZIALIZZAZIONE
+        // ========================================
+        document.addEventListener('DOMContentLoaded', function() {
+            addMessage("👋 Ciao! Sono Kandinsky AI. Vuoi sapere dei miei colori o dell'arte astratta?", "bot");
+            speak("Ciao! Sono Kandinsky AI. Vuoi sapere dei miei colori o dell'arte astratta?");
+            
+            // Gestione barra spaziatrice
+            document.addEventListener('keydown', handleKeyDown);
+            document.addEventListener('keyup', handleKeyUp);
+        });
+
+        // ========================================
+        // GESTIONE MESSAGGI
+        // ========================================
+        function addMessage(text, sender) {
+            const timestamp = new Date().toLocaleTimeString();
+            const message = { id: Date.now() + Math.random(), text, sender, timestamp };
+            messages.push(message);
+            renderMessages();
+            scrollToBottom();
+        }
+
+        function renderMessages() {
+            const container = document.getElementById('chatContainer');
+            container.innerHTML = messages.map(message => `
+                <div class="flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} items-start gap-2">
+                    ${message.sender === 'bot' ? `
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center text-base flex-shrink-0 bg-gradient-to-r from-red-400 via-yellow-400 to-blue-400">
+                            🎨
+                        </div>
+                    ` : ''}
+                    <div class="max-w-3xl px-4 py-3 rounded-2xl leading-relaxed ${
+                        message.sender === 'user' 
+                            ? 'bg-purple-500 text-white' 
+                            : 'bg-gray-100 border border-gray-300 text-gray-900'
+                    }">
+                        <p class="text-base">${message.text}</p>
+                        <p class="text-xs opacity-60 mt-1">${message.timestamp}</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('chatContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // ========================================
+        // SINTESI VOCALE
+        // ========================================
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                setIsSpeaking(true);
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'it-IT';
+                utterance.rate = 0.95;
+                utterance.onend = () => setIsSpeaking(false);
+                utterance.onerror = () => setIsSpeaking(false);
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function setIsSpeaking(speaking) {
+            isSpeaking = speaking;
+            const avatar = document.getElementById('avatar');
+            if (speaking) {
+                avatar.classList.add('avatar-speaking');
+            } else {
+                avatar.classList.remove('avatar-speaking');
+            }
+        }
+
+        // ========================================
+        // RICONOSCIMENTO VOCALE CON FALLBACK
+        // ========================================
+        function toggleMicrophone() {
+            if (isListening) {
+                stopListening();
+            } else {
+                startListening();
+            }
+        }
+
+        function startListening() {
+            // Prova prima con SpeechRecognition del browser
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                startBrowserSpeechRecognition();
+            } else {
+                // Fallback: registra audio e invia a Whisper
+                startAudioRecording();
+            }
+        }
+
+        function startBrowserSpeechRecognition() {
+            const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'it-IT';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            recognition.onstart = () => {
+                setListening(true);
+                setStatus("Ascolto...");
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                addMessage(transcript, "user");
+                processInput(transcript);
+            };
+
+            recognition.onend = () => {
+                setListening(false);
+                setStatus("Pronto");
+            };
+
+            recognition.onerror = (event) => {
+                console.log('Speech recognition error:', event.error);
+                setListening(false);
+                setStatus("Errore audio");
+                // Se fallisce, prova con registrazione audio
+                if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+                    setTimeout(() => startAudioRecording(), 1000);
+                }
+            };
+
+            recognition.start();
+        }
+
+        async function startAudioRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    await transcribeWithWhisper(audioBlob);
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                mediaRecorder.start();
+                setListening(true);
+                setStatus("Registrando...");
+
+            } catch (error) {
+                console.error('Error accessing microphone:', error);
+                setStatus("Errore microfono");
+            }
+        }
+
+        async function transcribeWithWhisper(audioBlob) {
+            try {
+                setStatus("Trascrivo...");
+                
+                const formData = new FormData();
+                formData.append('file', audioBlob, 'audio.wav');
+                formData.append('model', 'whisper-1');
+                formData.append('language', 'it');
+
+                const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${OPENAI_API_KEY}`
+                    },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const transcript = data.text;
+                
+                if (transcript && transcript.trim()) {
+                    addMessage(transcript, "user");
+                    processInput(transcript);
+                } else {
+                    setStatus("Non ho sentito nulla");
+                }
+
+            } catch (error) {
+                console.error('Whisper transcription error:', error);
+                setStatus("Errore trascrizione");
+            }
+        }
+
+        function stopListening() {
+            if (recognition) {
+                recognition.stop();
+            }
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+            setListening(false);
+            setStatus("Pronto");
+        }
+
+        function setListening(listening) {
+            isListening = listening;
+            const micButton = document.getElementById('micButton');
+            if (listening) {
+                micButton.classList.remove('bg-red-600');
+                micButton.classList.add('bg-green-600', 'animate-pulse');
+            } else {
+                micButton.classList.remove('bg-green-600', 'animate-pulse');
+                micButton.classList.add('bg-red-600');
+            }
+        }
+
+        // ========================================
+        // ELABORAZIONE INPUT E RISPOSTE
+        // ========================================
+        async function processInput(input) {
+            setStatus("Sto pensando...");
+            
+            // Prima cerca nella knowledge base locale
+            const localResponse = getLocalResponse(input);
+            if (localResponse) {
+                setTimeout(() => {
+                    addMessage(localResponse, "bot");
+                    speak(localResponse);
+                    setStatus("Pronto");
+                }, 500);
+                return;
+            }
+
+            // Se non trova risposta locale, usa OpenAI
+            try {
+                const response = await askOpenAI(input);
+                addMessage(response, "bot");
+                speak(response);
+                setStatus("Pronto");
+            } catch (error) {
+                console.error('OpenAI error:', error);
+                const fallbackResponse = "Mi dispiace, ho avuto un problema tecnico. Puoi riprovare o farmi una domanda sui miei colori?";
+                addMessage(fallbackResponse, "bot");
+                speak(fallbackResponse);
+                setStatus("Errore connessione");
+            }
+        }
+
+        function getLocalResponse(input) {
+            const query = input.toLowerCase();
+            
+            // Cerca nei colori
+            for (const [colore, descrizione] of Object.entries(knowledgeBase.colori)) {
+                if (query.includes(colore)) {
+                    return descrizione;
+                }
+            }
+            
+            // Cerca nei concetti
+            for (const [concetto, spiegazione] of Object.entries(knowledgeBase.concetti)) {
+                if (query.includes(concetto)) {
+                    return spiegazione;
+                }
+            }
+            
+            // Saluti
+            if (query.includes("ciao") || query.includes("salve") || query.includes("buongiorno")) {
+                return "Ciao! Vuoi sentire il suono dei colori o sapere dell'arte astratta?";
+            }
+            
+            return null; // Nessuna risposta locale trovata
+        }
+
+        async function askOpenAI(prompt) {
+            const response = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model: "gpt-4o-mini",
+                    messages: [
+                        {
+                            role: "system",
+                            content: `Sei Wassily Kandinsky, il famoso pittore astratto. Rispondi sempre in prima persona come se fossi lui. Usa un linguaggio semplice e chiaro (easy-to-read). Parla dei tuoi colori, della tua arte, della sinestesia (vedere i colori come suoni), del Bauhaus dove hai insegnato. Mantieni le risposte brevi (massimo 2-3 frasi) e accessibili. Se non sai qualcosa su Kandinsky, ammettilo onestamente.`
+                        },
+                        {
+                            role: "user",
+                            content: prompt
+                        }
+                    ],
+                    max_tokens: 200,
+                    temperature: 0.7
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data.choices[0].message.content;
+        }
+
+        // ========================================
+        // CONTROLLI UI
+        // ========================================
+        function sendMessage() {
+            const input = document.getElementById('textInput');
+            const text = input.value.trim();
+            if (text) {
+                addMessage(text, "user");
+                processInput(text);
+                input.value = '';
+            }
+        }
+
+        function setStatus(status) {
+            document.getElementById('status').textContent = status;
+            const statusElement = document.getElementById('status');
+            statusElement.className = `text-xs font-semibold ${
+                status.includes('Ascolto') || status.includes('Registrando') ? 'text-green-700' : 
+                status.includes('pensando') || status.includes('Trascrivo') ? 'text-yellow-700' : 
+                'text-gray-700'
+            }`;
+        }
+
+        // ========================================
+        // GESTIONE BARRA SPAZIATRICE
+        // ========================================
+        function toggleSpacebar() {
+            spacebarEnabled = !spacebarEnabled;
+            const button = document.getElementById('spacebarButton');
+            if (spacebarEnabled) {
+                button.textContent = '⌨️ Barra: ON';
+                button.className = 'px-3 py-1 rounded-full text-white text-xs font-bold bg-green-600';
+            } else {
+                button.textContent = '⌨️ Barra: OFF';
+                button.className = 'px-3 py-1 rounded-full text-white text-xs font-bold bg-gray-500';
+            }
+        }
+
+        function handleKeyDown(event) {
+            if (event.code === 'Space' && spacebarEnabled && !isListening && event.target.tagName !== 'INPUT') {
+                event.preventDefault();
+                startListening();
+            }
+        }
+
+        function handleKeyUp(event) {
+            if (event.code === 'Space' && spacebarEnabled && isListening && event.target.tagName !== 'INPUT') {
+                event.preventDefault();
+                stopListening();
+            }
+        }
+
+        // ========================================
+        // GESTIONE WEBCAM
+        // ========================================
+        async function toggleWebcam() {
+            const video = document.getElementById('videoPreview');
+            const button = document.getElementById('webcamButton');
+            
+            if (!webcamEnabled) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    video.srcObject = stream;
+                    video.classList.remove('hidden');
+                    webcamEnabled = true;
+                    button.textContent = '📹 ON';
+                    button.className = 'px-3 py-1 rounded-full text-white text-xs font-bold bg-green-600';
+                    addMessage("👋 Ti vedo! Benvenuto!", "bot");
+                    speak("Ti vedo! Benvenuto!");
+                } catch (error) {
+                    console.error('Webcam error:', error);
+                    addMessage("Errore webcam: " + error.message, "bot");
+                    speak("Non riesco ad accedere alla webcam");
+                }
+            } else {
+                if (video.srcObject) {
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                    video.srcObject = null;
+                }
+                video.classList.add('hidden');
+                webcamEnabled = false;
+                button.textContent = '📹 Webcam';
+                button.className = 'px-3 py-1 rounded-full text-white text-xs font-bold bg-blue-600 hover:bg-blue-700';
+                addMessage("Webcam disattivata.", "bot");
+            }
+        }
+    </script>
+</body>
+</html>
