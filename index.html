@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Kandinsky AI Assistant</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .chat-container { height: calc(100vh - 180px); }
+    .avatar-speaking { animation: pulse 1s infinite; }
+    @keyframes pulse {
+      0%,100%{transform:scale(1); box-shadow:0 0 10px rgba(255,193,7,.7);}
+      50%{transform:scale(1.05); box-shadow:0 0 20px rgba(255,193,7,1);}
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-yellow-50 via-blue-50 to-purple-50">
+  <div class="h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="p-2 bg-gradient-to-r from-red-300 via-yellow-300 to-blue-300 flex items-center justify-between">
+      <div id="avatar" class="w-10 h-10 rounded-full flex items-center justify-center bg-white">🎨</div>
+      <h1 class="text-base font-bold">Kandinsky AI Assistant</h1>
+      <div id="status" class="text-xs">Pronto</div>
+    </header>
+
+    <!-- Domande rapide -->
+    <div class="p-1 bg-yellow-50 border-b overflow-x-auto whitespace-nowrap">
+      <button onclick="processInput('Che suono ha il giallo?')" class="px-2 py-1 bg-blue-200 rounded-full text-xs mr-2">Che suono ha il giallo?</button>
+      <button onclick="processInput('Cos\'è l\'arte astratta?')" class="px-2 py-1 bg-blue-200 rounded-full text-xs mr-2">Cos'è l'arte astratta?</button>
+      <button onclick="processInput('Parlami del blu scuro')" class="px-2 py-1 bg-blue-200 rounded-full text-xs mr-2">Blu scuro</button>
+      <button onclick="processInput('Cos\'è la sinestesia?')" class="px-2 py-1 bg-blue-200 rounded-full text-xs">Cos'è la sinestesia?</button>
+    </div>
+
+    <!-- Chat -->
+    <main id="chatContainer" class="flex-1 overflow-y-auto p-2 space-y-2 bg-white chat-container"></main>
+
+    <!-- Footer -->
+    <footer class="p-2 bg-gray-50 border-t space-y-2">
+      <div class="flex gap-2">
+        <input id="textInput" placeholder="Scrivi qui..." class="flex-1 border rounded-full px-3 py-1 text-sm" />
+        <button onclick="sendMessage()" class="px-4 py-1 bg-blue-500 text-white rounded-full text-sm">Invia</button>
+      </div>
+      <div class="flex justify-center gap-2 flex-wrap">
+        <button id="micButton" onclick="toggleMicrophone()" class="w-10 h-10 rounded-full bg-red-600 text-white">🎤</button>
+        <button id="spacebarButton" onclick="toggleSpacebar()" class="px-2 py-1 rounded-full bg-green-600 text-white text-xs">⌨️ Barra: ON</button>
+        <button id="webcamButton" onclick="toggleWebcam()" class="px-2 py-1 rounded-full bg-blue-600 text-white text-xs">📹 Webcam</button>
+      </div>
+      <div class="flex justify-center">
+        <video id="videoPreview" autoplay playsinline muted class="w-32 h-24 border hidden"></video>
+      </div>
+    </footer>
+  </div>
+
+<script defer>
+/* ========= CONFIG ========= */
+const OPENAI_API_KEY = "INSERISCI-LA-TUA-CHIAVE-QUI";
+
+/* ========= VARIABILI ========= */
+let messages=[]; let isListening=false; let spacebarEnabled=true; 
+let webcamEnabled=false; let recognition=null; let mediaRecorder=null; let audioChunks=[];
+
+/* ========= KNOWLEDGE BASE ========= */
+const knowledgeBase={
+  colori:{
+    giallo:"Il giallo è energia. Suona come una tromba.",
+    blu:"Il blu è calma. Suona come un organo.",
+    rosso:"Il rosso è forza. Suona come una tuba.",
+    verde:"Il verde è equilibrio. Suona come un violino.",
+    viola:"Il viola è mistero. Suona come un corno inglese."
+  },
+  concetti:{
+    "arte astratta":"L'arte astratta mostra emozioni, non oggetti reali.",
+    sinestesia:"Per me i colori avevano suoni. Questo è sinestesia.",
+    bauhaus:"Ho insegnato alla scuola Bauhaus in Germania."
+  }
+};
+
+/* ========= MESSAGGI ========= */
+function addMessage(text,sender){
+  const time=new Date().toLocaleTimeString();
+  messages.push({text,sender,time});
+  renderMessages(); scrollBottom();
+}
+function renderMessages(){
+  const c=document.getElementById("chatContainer");
+  c.innerHTML=messages.map(m=>
+    `<div class="flex ${m.sender==="user"?"justify-end":"justify-start"}">
+      <div class="px-3 py-2 rounded-2xl ${m.sender==="user"?"bg-purple-500 text-white":"bg-gray-200"}">
+        ${m.text}<div class="text-[10px] opacity-70">${m.time}</div>
+      </div>
+    </div>`).join("");
+}
+function scrollBottom(){const c=document.getElementById("chatContainer"); c.scrollTop=c.scrollHeight;}
+
+/* ========= CHAT ========= */
+async function processInput(input){
+  addMessage(input,"user");
+  setStatus("Sto pensando...");
+  let local=getLocalResponse(input);
+  if(local){ respond(local); return; }
+  if(!OPENAI_API_KEY || OPENAI_API_KEY.includes("INSERISCI")){ respond("Serve una chiave API per risposte estese."); return;}
+  let ai=await askOpenAI(input);
+  respond(ai);
+}
+function getLocalResponse(q){
+  q=q.toLowerCase();
+  for(let [k,v] of Object.entries(knowledgeBase.colori)){ if(q.includes(k)) return v;}
+  for(let [k,v] of Object.entries(knowledgeBase.concetti)){ if(q.includes(k)) return v;}
+  if(q.includes("ciao")) return "Ciao! Vuoi sapere dei miei colori o della mia arte?";
+  return null;
+}
+function respond(text){
+  addMessage(text,"bot"); speak(text); setStatus("Pronto");
+}
+async function askOpenAI(prompt){
+  try{
+    const r=await fetch("https://api.openai.com/v1/chat/completions",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+OPENAI_API_KEY},
+      body:JSON.stringify({model:"gpt-4o-mini",messages:[{role:"system",content:"Sei Kandinsky, rispondi semplice e in italiano."},{role:"user",content:prompt}],max_tokens:200})
+    });
+    const data=await r.json(); return data.choices?.[0]?.message?.content || "Non ho capito.";
+  }catch(e){return "Errore connessione.";}
+}
+
+/* ========= INPUT ========= */
+function sendMessage(){
+  const el=document.getElementById("textInput");
+  if(!el.value.trim())return;
+  processInput(el.value.trim()); el.value="";
+}
+
+/* ========= STATO ========= */
+function setStatus(t){document.getElementById("status").textContent=t;}
+
+/* ========= SINTESI ========= */
+function speak(t){if("speechSynthesis"in window){let u=new SpeechSynthesisUtterance(t);u.lang="it-IT";speechSynthesis.speak(u);}}
+
+/* ========= MICROFONO ========= */
+function toggleMicrophone(){ if(isListening){stopListening()} else {startListening()} }
+function startListening(){
+  if("webkitSpeechRecognition"in window||"SpeechRecognition"in window){
+    const SR=window.webkitSpeechRecognition||window.SpeechRecognition;
+    recognition=new SR(); recognition.lang="it-IT"; recognition.onresult=e=>{processInput(e.results[0][0].transcript);}
+    recognition.onstart=()=>{setStatus("Ascolto..."); isListening=true;}
+    recognition.onend=()=>{isListening=false; setStatus("Pronto");}
+    recognition.start();
+  } else { setStatus("Browser non supporta microfono"); }
+}
+function stopListening(){ if(recognition) recognition.stop(); isListening=false; setStatus("Pronto"); }
+
+/* ========= BARRA ========= */
+function toggleSpacebar(){ spacebarEnabled=!spacebarEnabled;document.getElementById("spacebarButton").textContent="⌨️ Barra: "+(spacebarEnabled?"ON":"OFF");}
+document.addEventListener("keydown",e=>{if(e.code==="Space"&&spacebarEnabled&&!isListening&&e.target.tagName!=="INPUT"){e.preventDefault();startListening();}});
+document.addEventListener("keyup",e=>{if(e.code==="Space"&&spacebarEnabled&&isListening){e.preventDefault();stopListening();}});
+
+/* ========= WEBCAM ========= */
+async function toggleWebcam(){
+  let v=document.getElementById("videoPreview");
+  if(!webcamEnabled){
+    try{let s=await navigator.mediaDevices.getUserMedia({video:true});v.srcObject=s;v.classList.remove("hidden");webcamEnabled=true;setStatus("Webcam ON");}
+    catch(e){setStatus("Errore webcam");}
+  } else {
+    if(v.srcObject){v.srcObject.getTracks().forEach(t=>t.stop());v.srcObject=null;}
+    v.classList.add("hidden");webcamEnabled=false;setStatus("Webcam OFF");
+  }
+}
+</script>
+</body>
+</html>
