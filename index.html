@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kandinsky AI Assistant</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-yellow-50 via-blue-50 to-purple-50">
+  <div class="h-screen flex flex-col">
+    <!-- Header con domande guida -->
+    <header class="p-2 bg-gradient-to-r from-red-300 via-yellow-300 to-blue-300">
+      <h1 class="text-base font-bold text-center">Kandinsky AI Assistant</h1>
+      <div class="flex justify-center space-x-2 mt-2">
+        <button onclick="processInput('Chi era Kandinsky?')" class="px-2 py-1 rounded bg-white text-xs">Chi era Kandinsky?</button>
+        <button onclick="processInput('Che suono ha il giallo?')" class="px-2 py-1 rounded bg-white text-xs">Che suono ha il giallo?</button>
+        <button onclick="processInput('Cosa significa astratto?')" class="px-2 py-1 rounded bg-white text-xs">Cosa significa astratto?</button>
+      </div>
+      <div id="status" class="text-xs text-center mt-1">Pronto</div>
+    </header>
+
+    <!-- Chat -->
+    <main id="chatContainer" class="flex-1 overflow-y-auto p-2 space-y-2 bg-white"></main>
+
+    <!-- Footer -->
+    <footer class="p-2 bg-gray-50 border-t">
+      <div class="flex gap-2">
+        <input id="textInput" placeholder="Scrivi qui..." class="flex-1 border rounded-full px-3 py-1 text-sm" />
+        <button onclick="sendMessage()" class="px-4 py-1 bg-blue-500 text-white rounded-full text-sm">Invia</button>
+      </div>
+      <div class="flex justify-center gap-4 mt-2">
+        <button id="micButton" onclick="toggleMicrophone()" class="px-3 py-1 rounded-full bg-red-600 text-white text-xs">🎤 Microfono</button>
+        <button id="webcamButton" onclick="toggleWebcam()" class="px-3 py-1 rounded-full bg-blue-600 text-white text-xs">📹 Webcam</button>
+      </div>
+      <video id="videoPreview" autoplay playsinline muted class="w-32 h-24 border hidden mt-2 mx-auto"></video>
+    </footer>
+  </div>
+
+<script>
+let messages=[]; let isListening=false; let recognition=null; let webcamEnabled=false; let alreadyWelcomed=false;
+
+function addMessage(text,sender){
+  const time=new Date().toLocaleTimeString();
+  messages.push({text,sender,time});
+  renderMessages();
+}
+function renderMessages(){
+  const c=document.getElementById("chatContainer");
+  c.innerHTML=messages.map(m=>
+    `<div class="flex ${m.sender==='user'?'justify-end':'justify-start'}">
+      <div class="px-3 py-2 rounded-2xl ${m.sender==='user'?'bg-purple-500 text-white':'bg-gray-200'}">
+        ${m.text}<div class="text-[10px] opacity-70">${m.time}</div>
+      </div>
+    </div>`).join("");
+  c.scrollTop=c.scrollHeight;
+}
+function setStatus(t){document.getElementById("status").textContent=t;}
+function sendMessage(){
+  const el=document.getElementById("textInput");
+  if(!el.value.trim()) return;
+  processInput(el.value.trim());
+  el.value="";
+}
+async function processInput(input){
+  addMessage(input,"user");
+  setStatus("Sto pensando...");
+  try{
+    const res=await fetch("/.netlify/functions/chat",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({prompt:input})
+    });
+    const data=await res.json();
+    addMessage(data.reply,"bot");
+    speak(data.reply); // TTS automatico
+    setStatus("Pronto");
+  }catch(e){
+    addMessage("Errore di connessione.","bot");
+    setStatus("Errore");
+  }
+}
+function speak(t){if("speechSynthesis"in window){let u=new SpeechSynthesisUtterance(t);u.lang="it-IT";speechSynthesis.speak(u);}}
+
+// Microfono (SpeechRecognition)
+function toggleMicrophone(){
+  if(isListening){stopListening();return;}
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){setStatus("No support");return;}
+  recognition=new SR();
+  recognition.lang="it-IT";
+  recognition.onresult=e=>{processInput(e.results[0][0].transcript);}
+  recognition.onstart=()=>{isListening=true;setStatus("Ascolto...");}
+  recognition.onend=()=>{isListening=false;setStatus("Pronto");}
+  recognition.start();
+}
+function stopListening(){if(recognition) recognition.stop(); isListening=false; setStatus("Pronto");}
+
+// Attiva/disattiva microfono con barra spaziatrice
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space") {
+    e.preventDefault();
+    toggleMicrophone();
+  }
+});
+
+// Webcam + rilevamento volto per benvenuto
+async function toggleWebcam(){
+  const v=document.getElementById("videoPreview");
+  if(!webcamEnabled){
+    try{
+      let s=await navigator.mediaDevices.getUserMedia({video:true});
+      v.srcObject=s; v.classList.remove("hidden");
+      webcamEnabled=true; setStatus("Webcam ON");
+      // Face detection se supportata
+      if ("FaceDetector" in window){
+        const detector=new FaceDetector();
+        setInterval(async()=>{
+          if(v.srcObject && !alreadyWelcomed){
+            const faces=await detector.detect(v);
+            if(faces.length>0){
+              alreadyWelcomed=true;
+              addMessage("👋 Ciao, benvenuto!","bot");
+              speak("Ciao, benvenuto!");
+            }
+          }
+        },2000);
+      }else{
+        // fallback: mostra e parla
+        if(!alreadyWelcomed){
+          alreadyWelcomed=true;
+          addMessage("👋 Ciao, benvenuto!","bot");
+          speak("Ciao, benvenuto!");
+        }
+      }
+    }catch(e){setStatus("Errore webcam");}
+  }else{
+    if(v.srcObject){v.srcObject.getTracks().forEach(t=>t.stop());}
+    v.srcObject=null; v.classList.add("hidden"); webcamEnabled=false; setStatus("Pronto"); alreadyWelcomed=false;
+  }
+}
+</script>
+</body>
+</html>
